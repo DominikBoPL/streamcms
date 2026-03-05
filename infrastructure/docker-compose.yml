@@ -1,0 +1,222 @@
+# Docker Compose file format version - version 3.8 supports
+# all features we need (networks, volumes, health checks)
+version: "3.8"
+
+# "services" is the main block - each entry is one container
+services:
+
+  # ============================================
+  # PostgreSQL - our main relational database
+  # ============================================
+  postgres:
+    # "image" tells Docker which image to download from Docker Hub
+    # postgres:16-alpine means version 16, alpine = smaller Linux base
+    image: postgres:16-alpine
+
+    # Container name for easy reference in terminal
+    # (docker logs postgres, docker exec -it postgres psql ...)
+    container_name: streamcms-postgres
+
+    # Environment variables configure the PostgreSQL instance
+    environment:
+      POSTGRES_USER: streamcms
+      POSTGRES_PASSWORD: streamcms_dev_password
+      POSTGRES_DB: streamcms
+
+    # Port mapping: "HOST:CONTAINER"
+    # Left side (5433) = port on your Arch Linux machine
+    # Right side (5432) = port inside the container
+    # We use 5433 on host to avoid conflicts if you have local PostgreSQL
+    ports:
+      - "5433:5432"
+
+    # Named volume - data persists between container restarts
+    # Without this, all data is lost when container stops
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # This folder will be created in next step - it contains
+      # SQL scripts that run automatically on first startup
+      - ./init-scripts/postgres:/docker-entrypoint-initdb.d
+
+    # Health check - Docker will wait until PostgreSQL is actually
+    # ready to accept connections before marking it as "healthy"
+    # Other services can depend on this health status
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamcms"]
+      interval: 10s   # check every 10 seconds
+      timeout: 5s     # fail if no response in 5 seconds
+      retries: 5      # mark unhealthy after 5 failures
+
+    # Connect to our custom network (defined at bottom of file)
+    networks:
+      - streamcms-network
+
+  # ============================================
+  # RabbitMQ - message broker for async events
+  # "management" tag includes the web admin panel
+  # ============================================
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: streamcms-rabbitmq
+
+    environment:
+      RABBITMQ_DEFAULT_USER: streamcms
+      RABBITMQ_DEFAULT_PASS: streamcms_dev_password
+      # Virtual host - like a namespace inside RabbitMQ
+      # Separates our queues from any other apps using same RabbitMQ
+      RABBITMQ_DEFAULT_VHOST: streamcms
+
+    ports:
+      - "5672:5672"    # AMQP protocol port (used by Spring Boot)
+      - "15672:15672"  # Web management UI (open in browser)
+
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - streamcms-network
+
+  # ============================================
+  # MinIO - S3-compatible object storage
+  # This is where video files will be stored
+  # ============================================
+  minio:
+    image: minio/minio:latest
+    container_name: streamcms-minio
+
+    # "command" overrides the default Docker image command
+    # "server" starts MinIO, --console-address exposes the web UI
+    command: server /data --console-address ":9001"
+
+    environment:
+      MINIO_ROOT_USER: streamcms
+      MINIO_ROOT_PASSWORD: streamcms_dev_password
+
+    ports:
+      - "9000:9000"  # S3 API (used by Spring Boot to upload/download)
+      - "9001:9001"  # Web console (open in browser to see buckets)
+
+    volumes:
+      - minio_data:/data
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - streamcms-network
+
+  # ============================================
+  # Redis - in-memory cache and rate limiting store
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: streamcms-redis
+
+    ports:
+      - "6379:6379"
+
+    # Redis command with password protection
+    command: redis-server --requirepass streamcms_dev_password
+
+    volumes:
+      - redis_data:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "streamcms_dev_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - streamcms-network
+
+  # ============================================
+  # Keycloak - Identity and Access Management
+  # Handles login, JWT tokens, OAuth2 flows
+  # ============================================
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: streamcms-keycloak
+
+    # "start-dev" mode - simplified setup for development
+    # Never use start-dev in production!
+    command: start-dev
+
+    environment:
+      # Admin credentials for Keycloak's own admin panel
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin_dev_password
+
+      # Tell Keycloak to use our PostgreSQL instead of its default H2
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/streamcms
+      KC_DB_USERNAME: streamcms
+      KC_DB_PASSWORD: streamcms_dev_password
+
+      # Keycloak schema inside PostgreSQL
+      KC_DB_SCHEMA: keycloak
+
+    ports:
+      - "8080:8080"  # Web UI + API (open in browser for admin panel)
+
+    # "depends_on" with condition means Keycloak won't start
+    # until PostgreSQL passes its health check
+    # This prevents "connection refused" errors on startup
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - streamcms-network
+
+  # ============================================
+  # Nginx-RTMP - Live streaming ingest server
+  # Receives RTMP stream from OBS, converts to HLS
+  # ============================================
+  nginx-rtmp:
+    image: tiangolo/nginx-rtmp
+    container_name: streamcms-nginx-rtmp
+
+    ports:
+      - "1935:1935"   # RTMP port (OBS streams to this)
+      - "8088:80"     # HTTP port (HLS segments served from here)
+
+    volumes:
+      # Mount our custom nginx config (we'll create this next)
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # "ro" = read-only mount, container can't modify the config file
+      # HLS segments written here by nginx, read by frontend player
+      - nginx_hls:/tmp/hls
+
+    networks:
+      - streamcms-network
+
+# ============================================
+# Named volumes - persistent storage
+# Docker manages these, data survives container restarts
+# To reset everything: docker compose down -v
+# ============================================
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  minio_data:
+  redis_data:
+  nginx_hls:
+
+# ============================================
+# Custom network - all containers share this network
+# Containers can reach each other by service name
+# e.g. Spring Boot connects to "postgres:5432" not "localhost:5432"
+# ============================================
+networks:
+  streamcms-network:
+    driver: bridge
