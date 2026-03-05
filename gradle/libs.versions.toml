@@ -1,0 +1,48 @@
+# This file is the "single source of truth" for all dependency versions
+# Think of it as a package.json for Java/Kotlin dependencies
+
+[versions]
+# Core framework versions
+kotlin = "1.9.22"
+spring-boot = "3.2.3"
+spring-dependency-management = "1.1.4"
+
+# Database
+postgresql = "42.7.1"
+
+# Testing
+kotest = "5.8.0"
+mockk = "1.13.9"
+
+# Utilities
+jackson = "2.16.1"
+
+[libraries]
+# Libraries are defined as "alias = { group, name, version }"
+# You'll reference them in build.gradle.kts as: libs.postgresql
+# instead of writing "org.postgresql:postgresql:42.7.1" every time
+
+postgresql = { group = "org.postgresql", name = "postgresql", version.ref = "postgresql" }
+
+# Spring Boot starters - "starters" are bundles of dependencies
+# spring-boot-starter-web includes: Tomcat, Spring MVC, Jackson, etc.
+spring-boot-starter-web = { group = "org.springframework.boot", name = "spring-boot-starter-web" }
+spring-boot-starter-data-jpa = { group = "org.springframework.boot", name = "spring-boot-starter-data-jpa" }
+spring-boot-starter-security = { group = "org.springframework.boot", name = "spring-boot-starter-security" }
+spring-boot-starter-amqp = { group = "org.springframework.boot", name = "spring-boot-starter-amqp" }
+spring-boot-starter-test = { group = "org.springframework.boot", name = "spring-boot-starter-test" }
+
+# Kotest - Kotlin-native testing framework
+# Much more expressive than JUnit for Kotlin code
+kotest-runner = { group = "io.kotest", name = "kotest-runner-junit5", version.ref = "kotest" }
+kotest-assertions = { group = "io.kotest", name = "kotest-assertions-core", version.ref = "kotest" }
+
+# MockK - Kotlin-native mocking library (replaces Mockito)
+mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+
+[plugins]
+# Plugins referenced here can be used in build.gradle.kts files
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }

@@ -1,0 +1,65 @@
+# ============================================
+# Gradle build outputs and caches
+# ============================================
+.gradle/
+build/
+out/
+
+# Gradle wrapper jar is committed (it's needed to build without Gradle installed)
+# but the downloaded Gradle distribution is not
+!gradle/wrapper/gradle-wrapper.jar
+
+# ============================================
+# IntelliJ IDEA
+# ============================================
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# IDEA shelf (local code stash) and workspace settings
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/shelf/
+
+# ============================================
+# Kotlin / Java compiled files
+# ============================================
+*.class
+*.jar
+*.war
+
+# ============================================
+# OS generated files
+# ============================================
+.DS_Store           # macOS
+Thumbs.db           # Windows
+*~                  # Linux temp files
+
+# ============================================
+# Environment and secrets - NEVER commit these
+# ============================================
+.env
+.env.local
+.env.*.local
+*.secret
+application-local.yml
+application-local.properties
+
+# ============================================
+# Docker volumes (local data)
+# ============================================
+infrastructure/volumes/
+
+# ============================================
+# Node.js (frontend)
+# ============================================
+node_modules/
+frontend/web/.next/
+frontend/web/dist/
+
+# ============================================
+# Logs
+# ============================================
+*.log
+logs/
