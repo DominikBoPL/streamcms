@@ -1,0 +1,74 @@
+# Spring Boot configuration file
+# YAML format is preferred over .properties - easier to read for nested config
+
+spring:
+  application:
+    name: media-service
+  profiles:        # ← ta sama głębokość co "application"
+    active: dev
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  servlet:
+    multipart:
+      # Maximum size of a single uploaded file
+      max-file-size: 2GB
+      # Maximum size of entire multipart request (all files + form fields)
+      max-request-size: 2GB
+
+
+
+  datasource:
+    # "postgres" here is the Docker service name from docker-compose.yml
+    # Docker's internal network resolves "postgres" to the container's IP
+    # When running locally outside Docker, change to "localhost"
+    url: jdbc:postgresql://localhost:5433/streamcms
+    username: streamcms
+    password: streamcms_dev_password
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    # "update" = Hibernate updates schema automatically based on entities
+    # Options: none, validate, update, create, create-drop
+    # For production you'd use "validate" and manage schema with Flyway/Liquibase
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        # Tell Hibernate which SQL dialect to use
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        # Log all SQL queries to console - helpful during development
+        show_sql: true
+        format_sql: true
+    # Map each service to its own schema (we created these in 01-init.sql)
+    default-schema: media
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: streamcms
+    password: streamcms_dev_password
+    virtual-host: streamcms
+
+# Custom configuration properties for MinIO
+# We'll map these to a @ConfigurationProperties class
+minio:
+  url: http://localhost:9000
+  access-key: streamcms
+  secret-key: streamcms_dev_password
+  bucket-name: videos
+
+# Spring Boot Actuator - exposes health/metrics endpoints
+# Useful for monitoring and Docker health checks
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# Server port - each service will use a different port
+server:
+  port: 8081

@@ -29,15 +29,24 @@ dependencies {
 
     // Messaging - RabbitMQ integration
     implementation(libs.spring.boot.starter.amqp)
+    // Actuator - exposes /actuator/health, /actuator/metrics etc.
+    // Without this dependency the endpoints simply don't exist
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
 
     // PostgreSQL driver
     runtimeOnly(libs.postgresql)
     // "runtimeOnly" means: needed to run but not to compile
     // The driver is loaded by Spring at startup, not referenced in code directly
+    implementation("io.minio:minio:8.5.7")
+    implementation(libs.kotlin.reflect)
 
     // Testing
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.kotest.runner)
     testImplementation(libs.kotest.assertions)
     testImplementation(libs.mockk)
+
+    // MockK integration for Spring - allows mocking Spring beans
+    testImplementation("com.ninja-squad:springmockk:4.0.2")
+
 }
